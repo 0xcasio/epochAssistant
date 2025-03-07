@@ -1,0 +1,22 @@
+[
+  {
+    "inputs": [
+      {
+        "name": "input1",
+        "type": "bytes32"
+      },
+      {
+        "name": "input2",
+        "type": "uint256"
+      }
+    ],
+    "name": "computeRewards",
+    "outputs": [
+      {
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  }
+]
