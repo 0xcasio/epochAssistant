@@ -91,24 +91,75 @@ async function callContractFunction(inputValues) {
 function saveToFile(inputs, result) {
   const timestamp = new Date().toISOString();
   
-  // Create headers if file doesn't exist
-  if (!fs.existsSync(config.outputFilePath)) {
-    // Create headers based on the selected function
+  // Create formatted result (divided by 1e18)
+  let formattedResult = "N/A";
+  try {
+    // Check if the result is a number or can be converted to one
+    if (!isNaN(result.replace(/,/g, ''))) {
+      const numericResult = parseFloat(result.replace(/,/g, ''));
+      formattedResult = (numericResult / 1e18).toString();
+      // Format with 6 decimal places
+      if (formattedResult.includes('.')) {
+        const parts = formattedResult.split('.');
+        if (parts[1].length > 6) {
+          formattedResult = `${parts[0]}.${parts[1].substring(0, 6)}`;
+        }
+      }
+    }
+  } catch (error) {
+    console.log('Could not format result as number divided by 1e18');
+  }
+  
+  // Check if file exists
+  if (fs.existsSync(config.outputFilePath)) {
+    // Read the first line to check headers
+    const fileContent = fs.readFileSync(config.outputFilePath, 'utf8');
+    const lines = fileContent.split('\n');
+    
+    if (lines.length > 0) {
+      const headers = lines[0];
+      
+      // Check if FormattedResult column exists
+      if (!headers.includes('FormattedResult')) {
+        console.log('Updating CSV file to include FormattedResult column...');
+        
+        // Create a new file with updated headers and copy existing data
+        const newContent = lines.map((line, index) => {
+          if (index === 0) {
+            // Update header line
+            return `${line},FormattedResult`;
+          } else if (line.trim() !== '') {
+            // Add N/A to existing data rows
+            return `${line},N/A`;
+          }
+          return line;
+        }).join('\n');
+        
+        fs.writeFileSync(config.outputFilePath, newContent);
+        console.log('CSV file updated with new column.');
+      }
+    }
+  } else {
+    // Create new file with headers
     const inputHeaders = config.selectedFunction.inputs
       .map((input, index) => input.name || `Input${index+1}`)
       .join(',');
-    const headers = `Timestamp,Function,${inputHeaders},Result\n`;
+    const headers = `Timestamp,Function,${inputHeaders},Result,FormattedResult\n`;
     fs.writeFileSync(config.outputFilePath, headers);
+    console.log(`Created new CSV file with headers`);
   }
   
   // Format the CSV line
   const functionName = config.selectedFunction.name;
   const inputValues = inputs.join(',');
-  const csvLine = `${timestamp},${functionName},${inputValues},${result}\n`;
+  const csvLine = `${timestamp},${functionName},${inputValues},${result},${formattedResult}\n`;
   
   // Append data
   fs.appendFileSync(config.outputFilePath, csvLine);
   console.log(`📝 Result saved to ${config.outputFilePath}`);
+  if (formattedResult !== "N/A") {
+    console.log(`   Formatted result (÷ 1e18): ${formattedResult}`);
+  }
 }
 
 // Function to prompt user for function selection
