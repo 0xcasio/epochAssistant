@@ -105,6 +105,7 @@ async function processAllPoolIds(input2Value) {
   
   const results = [];
   console.log(`\nProcessing ${config.predefinedInputs.poolIds.length} predefined pool IDs with input2 = ${input2Value}...`);
+  console.log(`Function name: ${config.selectedFunction.name}`);
   
   // Format input2
   const formattedInput2 = ethers.BigNumber.from(input2Value);
@@ -126,6 +127,7 @@ async function processAllPoolIds(input2Value) {
     
     try {
       // Call the function with the two inputs
+      console.log(`Calling ${config.selectedFunction.name}(${poolId}, ${formattedInput2})`);
       const result = await contract[config.selectedFunction.name](poolId, formattedInput2);
       
       // Format the result
@@ -136,14 +138,17 @@ async function processAllPoolIds(input2Value) {
         formattedResult = result.toString();
       }
       
-      console.log(`✅ Result: ${formattedResult}`);
+      console.log(`✅ Raw result: ${formattedResult}`);
       
       // Create formatted value (divided by 1e18)
       let formattedValue = "N/A";
       try {
         if (!isNaN(formattedResult.replace(/,/g, ''))) {
           const numericResult = parseFloat(formattedResult.replace(/,/g, ''));
+          console.log(`Numeric result: ${numericResult}`);
           formattedValue = (numericResult / 1e18).toString();
+          console.log(`After division by 1e18: ${formattedValue}`);
+          
           // Format with 6 decimal places
           if (formattedValue.includes('.')) {
             const parts = formattedValue.split('.');
@@ -151,13 +156,13 @@ async function processAllPoolIds(input2Value) {
               formattedValue = `${parts[0]}.${parts[1].substring(0, 6)}`;
             }
           }
+          console.log(`Final formatted value: ${formattedValue}`);
+        } else {
+          console.log(`Result is not a number: ${formattedResult}`);
         }
       } catch (error) {
-        console.log('Could not format result as number divided by 1e18');
+        console.log(`Error formatting result: ${error.message}`);
       }
-      
-      // Save result to CSV
-      saveToFile([poolId, formattedInput2], formattedResult, poolName);
       
       results.push({ 
         poolName, 
@@ -183,6 +188,7 @@ async function processAllPoolIds(input2Value) {
   console.log(`Total pools processed: ${results.length}`);
   console.log(`Successful: ${results.filter(r => r.error === null).length}`);
   console.log(`Failed: ${results.filter(r => r.error !== null).length}`);
+  console.log('Results:', JSON.stringify(results, null, 2));
   
   return { success: true, results };
 }
