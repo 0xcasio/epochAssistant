@@ -11,7 +11,21 @@ const config = {
   rpcUrl: process.env.RPC_URL || 'https://arb1.arbitrum.io/rpc',
   contractAddress: process.env.CONTRACT_ADDRESS || '',
   arbiscanApiKey: process.env.ARBISCAN_API_KEY || '',  // Optional, for higher rate limits
-  contractAbi: [],  // Will be fetched automatically
+  contractAbi: [
+    // Paste the ABI here - you can get it from Arbiscan
+    // Example of what it might look like:
+    {
+      "inputs": [
+        {"internalType": "bytes32", "name": "poolId", "type": "bytes32"},
+        {"internalType": "uint256", "name": "epoch", "type": "uint256"}
+      ],
+      "name": "computeRewards",
+      "outputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    // ... more functions
+  ],
   selectedFunction: null,  // Will be set by user selection
   outputFilePath: process.env.OUTPUT_FILE_PATH || './results.csv',
   // Predefined values for pool IDs (bytes32 values)
@@ -37,6 +51,12 @@ const config = {
 
 // Fetch contract ABI from Arbiscan
 async function fetchContractAbi() {
+  // If ABI is already hardcoded, just return
+  if (config.contractAbi && config.contractAbi.length > 0) {
+    console.log('✅ Using hardcoded ABI');
+    return true;
+  }
+  
   try {
     console.log('📡 Fetching contract ABI from Arbiscan...');
     
@@ -65,6 +85,7 @@ async function fetchContractAbi() {
       // Save ABI to file for future use
       fs.writeFileSync('contract-abi.json', JSON.stringify(abi, null, 2));
       console.log('✅ Contract ABI fetched successfully!');
+      console.log(`Found ${abi.length} items in ABI`);
       return true;
     } else {
       console.log(`❌ Failed to fetch ABI: ${response.data.message}`);
@@ -610,14 +631,27 @@ module.exports = async (req, res) => {
         await fetchContractAbi();
       }
       
-      // Filter to only show read functions
+      console.log(`Total ABI items: ${config.contractAbi.length}`);
       const readFunctions = config.contractAbi.filter(item => 
         item.type === 'function' && 
         (item.stateMutability === 'view' || item.stateMutability === 'pure')
       );
+      console.log(`Read functions found: ${readFunctions.length}`);
+      
+      // After filtering for functions with bytes32 and uint256 inputs, add:
+      const suitableFunctions = readFunctions.filter(func => 
+        func.inputs && 
+        func.inputs.length === 2 &&
+        func.inputs[0].type.includes('bytes') &&
+        func.inputs[1].type.includes('int')
+      );
+      console.log(`Suitable functions found: ${suitableFunctions.length}`);
+      if (suitableFunctions.length > 0) {
+        console.log('First suitable function:', suitableFunctions[0].name);
+      }
       
       res.setHeader('Content-Type', 'application/json');
-      res.status(200).json({ success: true, functions: readFunctions });
+      res.status(200).json({ success: true, functions: suitableFunctions });
     }
     else if (req.method === 'POST' && pathname === '/api/call-function') {
       // Parse request body
