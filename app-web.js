@@ -261,53 +261,66 @@ const indexHtml = `
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Epoch Rewards Lookup | Stryke</title>
+    <title>Stryke Epoch Rewards Lookup | Stryke</title>
     <style>
         body {
-            font-family: Arial, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
             line-height: 1.6;
-            max-width: 800px;
-            margin: 0 auto;
+            margin: 0;
             padding: 20px;
-            color: #333;
+            color: #E0E0E0;
+            background-color: #1C1C1C;
         }
         h1 {
-            text-align: center;
-            margin-bottom: 20px;
+            text-align: left;
+            margin-bottom: 30px;
+            color: #FFFFFF;
+            font-weight: 500;
         }
         .container {
-            background-color: #f9f9f9;
-            border-radius: 5px;
-            padding: 20px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            background-color: #2A2A2A;
+            border-radius: 12px;
+            padding: 24px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
         }
         label {
             display: block;
-            margin-bottom: 5px;
-            font-weight: bold;
+            margin-bottom: 8px;
+            font-weight: 500;
+            color: #B0B0B0;
         }
         input, select {
             width: 100%;
-            padding: 8px;
+            padding: 12px;
             margin-bottom: 20px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
+            border: 1px solid #404040;
+            border-radius: 8px;
             box-sizing: border-box;
+            background-color: #1C1C1C;
+            color: #FFFFFF;
+            font-size: 14px;
+        }
+        input:focus, select:focus {
+            outline: none;
+            border-color: #606060;
         }
         button {
-            background-color: #4CAF50;
-            color: white;
-            padding: 10px 15px;
+            background-color: rgb(243, 255, 105);
+            color: #000000;
+            padding: 12px 24px;
             border: none;
-            border-radius: 4px;
+            border-radius: 8px;
             cursor: pointer;
-            font-size: 16px;
+            font-size: 14px;
+            font-weight: 500;
+            transition: background-color 0.2s;
         }
         button:hover {
-            background-color: #45a049;
+            background-color: rgb(220, 230, 95);
         }
         button:disabled {
-            background-color: #cccccc;
+            background-color: #404040;
+            color: #808080;
             cursor: not-allowed;
         }
         .results {
@@ -316,44 +329,56 @@ const indexHtml = `
         table {
             width: 100%;
             border-collapse: collapse;
-            margin-top: 10px;
+            margin-top: 16px;
+            background-color: #2A2A2A;
+            border-radius: 8px;
+            overflow: hidden;
         }
         th, td {
             text-align: left;
-            padding: 12px;
-            border-bottom: 1px solid #ddd;
+            padding: 16px;
+            border-bottom: 1px solid #404040;
+            color: #E0E0E0;
         }
         th {
-            background-color: #f2f2f2;
+            background-color: #1C1C1C;
+            font-weight: 500;
+            color: #B0B0B0;
         }
         tr:hover {
-            background-color: #f5f5f5;
+            background-color: #333333;
         }
         .error {
-            color: #ff0000;
-            background-color: #ffeeee;
-            padding: 10px;
-            border-radius: 4px;
+            color: #ff6b6b;
+            background-color: rgba(255, 107, 107, 0.1);
+            padding: 12px;
+            border-radius: 8px;
             margin-bottom: 15px;
+            border: 1px solid rgba(255, 107, 107, 0.2);
         }
         .success {
-            color: #008000;
-            background-color: #eeffee;
-            padding: 10px;
-            border-radius: 4px;
+            color: #69db7c;
+            background-color: rgba(105, 219, 124, 0.1);
+            padding: 12px;
+            border-radius: 8px;
             margin-bottom: 15px;
+            border: 1px solid rgba(105, 219, 124, 0.2);
         }
         .loading {
             text-align: center;
             margin: 20px 0;
+            color: #B0B0B0;
         }
         .hidden {
             display: none;
         }
+        #functionSelectContainer, #inputContainer {
+            margin-bottom: 24px;
+        }
     </style>
 </head>
 <body>
-    <h1>Epoch Rewards Lookup</h1>
+    <h1>Stryke Epoch Rewards Lookup</h1>
     
     <div class="container">
         <div id="errorMsg" class="error hidden"></div>
