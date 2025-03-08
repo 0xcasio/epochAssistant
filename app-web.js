@@ -261,7 +261,7 @@ const indexHtml = `
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Contract Function Caller</title>
+    <title>Epoch Rewards Lookup | Stryke</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -353,7 +353,7 @@ const indexHtml = `
     </style>
 </head>
 <body>
-    <h1>Contract Function Caller</h1>
+    <h1>Epoch Rewards Lookup</h1>
     
     <div class="container">
         <div id="errorMsg" class="error hidden"></div>
@@ -368,11 +368,11 @@ const indexHtml = `
             </div>
             
             <div id="inputContainer">
-                <label for="input2Value">Enter Input Value (Week Number):</label>
-                <input type="text" id="input2Value" placeholder="Enter a number...">
+                <label for="input2Value">Enter Epoch number:</label>
+                <input type="text" id="input2Value" placeholder="Enter epoch number...">
             </div>
             
-            <button id="submitBtn" onclick="callFunction()">Process All Pools</button>
+            <button id="submitBtn" onclick="callFunction()">Find Rewards</button>
         </div>
         
         <div id="loading" class="loading hidden">
@@ -419,7 +419,13 @@ const indexHtml = `
                         ) {
                             const option = document.createElement('option');
                             option.value = func.name;
-                            option.textContent = \`\${func.name} (\${func.inputs[1].type})\`;
+                            option.textContent = func.name + ' (' + func.inputs[1].type + ')';
+                            
+                            // Set computeRewards as the default selected option
+                            if (func.name === 'computeRewards') {
+                                option.selected = true;
+                            }
+                            
                             select.appendChild(option);
                         }
                     });
@@ -485,7 +491,7 @@ const indexHtml = `
                 
                 if (data.success) {
                     displayResults(data.results);
-                    showSuccess('Successfully processed all pools!');
+                    showSuccess('Successfully fetched epoch!');
                 } else {
                     showError(data.error || 'Failed to call function');
                 }
