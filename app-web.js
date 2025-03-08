@@ -1,5 +1,5 @@
 // app-web.js - Modified version of your original app with a web interface
-const ethers = require('ethers');
+const { ethers } = require('ethers');
 const fs = require('fs');
 const axios = require('axios');
 const http = require('http');
@@ -108,10 +108,10 @@ async function processAllPoolIds(input2Value) {
   console.log(`Function name: ${config.selectedFunction.name}`);
   
   // Format input2
-  const formattedInput2 = ethers.BigNumber.from(input2Value);
+  const formattedInput2 = ethers.getBigInt(input2Value);
   
   // Set up provider and contract
-  const provider = new ethers.providers.JsonRpcProvider(config.rpcUrl);
+  const provider = new ethers.JsonRpcProvider(config.rpcUrl);
   const contract = new ethers.Contract(
     config.contractAddress,
     config.contractAbi,
