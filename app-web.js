@@ -24,11 +24,11 @@ const config = {
       "0x36ff4f3050b6a776353d7d160276dcf6b310a658502e226fdd2fa049e6c603dd"
     ],
     poolNames: [
-      "pcsWethId",
-      "pcsWbtcId", 
-      "orangePcsWethUsdcGaugeId", 
-      "orangePcsWbtcUsdcGaugeId", 
-      "orangePcsArbUsdcGaugeId"
+      "PancankeSwap WETH",
+      "PancakeSwap WBTC", 
+      "OrangeFinance PCS WETH", 
+      "OrangeFinance PCS WBTC", 
+      "OrangeFinance PCS ARB"
     ]
   }
 };
@@ -385,8 +385,7 @@ const indexHtml = `
                 <thead>
                     <tr>
                         <th>Pool Name</th>
-                        <th>Raw Result</th>
-                        <th>Formatted (÷ 1e18)</th>
+                        <th>Total SYK rewards</th>
                     </tr>
                 </thead>
                 <tbody id="resultsBody">
@@ -509,16 +508,6 @@ const indexHtml = `
                 const nameCell = document.createElement('td');
                 nameCell.textContent = result.poolName;
                 row.appendChild(nameCell);
-                
-                // Raw result cell
-                const resultCell = document.createElement('td');
-                if (result.error) {
-                    resultCell.textContent = 'Error: ' + result.error;
-                    resultCell.style.color = 'red';
-                } else {
-                    resultCell.textContent = result.result;
-                }
-                row.appendChild(resultCell);
                 
                 // Formatted result cell
                 const formattedCell = document.createElement('td');
