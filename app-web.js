@@ -579,39 +579,35 @@ const indexHtml = `
 </html>
 `;
 
-// Create HTTP server
-const server = http.createServer(async (req, res) => {
+// Create HTTP server handler for Vercel
+module.exports = async (req, res) => {
   try {
+    // Set CORS headers
+    res.setHeader('Access-Control-Allow-Credentials', true);
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,POST');
+    res.setHeader('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version');
+
+    if (req.method === 'OPTIONS') {
+      res.status(200).end();
+      return;
+    }
+
     // Parse URL
-    const url = new URL(req.url, `http://${req.headers.host}`);
+    const url = new URL(req.url, `https://${req.headers.host}`);
     const pathname = url.pathname;
     
-    // Log incoming requests
-    console.log(`${req.method} ${pathname}`);
-    
     // Route requests
-    if (req.method === 'GET' && pathname === '/') {
+    if (req.method === 'GET' && (pathname === '/' || pathname === '')) {
       // Serve main HTML page
-      res.writeHead(200, { 'Content-Type': 'text/html' });
-      res.end(indexHtml);
+      res.setHeader('Content-Type', 'text/html');
+      res.status(200).send(indexHtml);
     }
     else if (req.method === 'GET' && pathname === '/api/functions') {
       // Get contract functions
       if (!config.contractAbi || config.contractAbi.length === 0) {
-        // Try to load ABI from file
-        try {
-          if (fs.existsSync('contract-abi.json')) {
-            const abiJson = fs.readFileSync('contract-abi.json', 'utf8');
-            config.contractAbi = JSON.parse(abiJson);
-          } else {
-            // Fetch ABI if not available
-            await fetchContractAbi();
-          }
-        } catch (error) {
-          res.writeHead(500, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ success: false, error: 'Error loading ABI: ' + error.message }));
-          return;
-        }
+        // Fetch ABI if not available
+        await fetchContractAbi();
       }
       
       // Filter to only show read functions
@@ -620,96 +616,49 @@ const server = http.createServer(async (req, res) => {
         (item.stateMutability === 'view' || item.stateMutability === 'pure')
       );
       
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ success: true, functions: readFunctions }));
+      res.setHeader('Content-Type', 'application/json');
+      res.status(200).json({ success: true, functions: readFunctions });
     }
     else if (req.method === 'POST' && pathname === '/api/call-function') {
-      // Call function with all pool IDs
-      let body = '';
+      // Parse request body
+      const body = req.body;
+      const { functionName, input2Value } = body;
       
-      // Collect request body
-      req.on('data', chunk => {
-        body += chunk.toString();
-      });
+      if (!functionName) {
+        res.setHeader('Content-Type', 'application/json');
+        res.status(400).json({ success: false, error: 'Function name is required' });
+        return;
+      }
       
-      // Process request when complete
-      req.on('end', async () => {
-        try {
-          const data = JSON.parse(body);
-          const { functionName, input2Value } = data;
-          
-          if (!functionName) {
-            res.writeHead(400, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ success: false, error: 'Function name is required' }));
-            return;
-          }
-          
-          if (!input2Value && input2Value !== '0') {
-            res.writeHead(400, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ success: false, error: 'Input value is required' }));
-            return;
-          }
-          
-          // Find function in ABI
-          config.selectedFunction = config.contractAbi.find(item => item.name === functionName);
-          
-          if (!config.selectedFunction) {
-            res.writeHead(400, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ success: false, error: `Function ${functionName} not found in ABI` }));
-            return;
-          }
-          
-          // Process all pool IDs
-          const result = await processAllPoolIds(input2Value);
-          
-          res.writeHead(200, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify(result));
-        } catch (error) {
-          res.writeHead(500, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ success: false, error: error.message }));
-        }
-      });
+      if (!input2Value && input2Value !== '0') {
+        res.setHeader('Content-Type', 'application/json');
+        res.status(400).json({ success: false, error: 'Input value is required' });
+        return;
+      }
+      
+      // Find function in ABI
+      config.selectedFunction = config.contractAbi.find(item => item.name === functionName);
+      
+      if (!config.selectedFunction) {
+        res.setHeader('Content-Type', 'application/json');
+        res.status(400).json({ success: false, error: `Function ${functionName} not found in ABI` });
+        return;
+      }
+      
+      // Process all pool IDs
+      const result = await processAllPoolIds(input2Value);
+      
+      res.setHeader('Content-Type', 'application/json');
+      res.status(200).json(result);
     }
     else {
       // Not found
-      res.writeHead(404, { 'Content-Type': 'text/plain' });
-      res.end('Not Found');
+      res.setHeader('Content-Type', 'text/plain');
+      res.status(404).send('Not Found');
     }
   } catch (error) {
     // Server error
-    res.writeHead(500, { 'Content-Type': 'text/plain' });
-    res.end('Internal Server Error: ' + error.message);
+    res.setHeader('Content-Type', 'text/plain');
+    res.status(500).send('Internal Server Error: ' + error.message);
   }
-});
-
-// Check configuration and start server
-async function startServer() {
-  // Make sure we have a contract address
-  if (!config.contractAddress) {
-    console.log('\n⚠️ No contract address configured. Please set CONTRACT_ADDRESS in .env file');
-    process.exit(1);
-  }
-  
-  // Try to load ABI or fetch it
-  try {
-    if (fs.existsSync('contract-abi.json')) {
-      const abiJson = fs.readFileSync('contract-abi.json', 'utf8');
-      config.contractAbi = JSON.parse(abiJson);
-      console.log('✅ Loaded ABI from file');
-    } else {
-      console.log('⚠️ No ABI file found, will fetch from Arbiscan on first request');
-    }
-  } catch (error) {
-    console.log('⚠️ Error loading ABI file: ' + error.message);
-  }
-  
-  // Start HTTP server
-  const port = process.env.PORT || 3000;
-  server.listen(port, () => {
-    console.log(`\n✅ Server running at http://localhost:${port}`);
-    console.log(`\nOpen your browser to this address to use the web interface`);
-  });
-}
-
-// Start server
-startServer();
+};
