@@ -484,24 +484,18 @@ const indexHtml = `
                     const select = document.getElementById('functionSelect');
                     select.innerHTML = '<option value="">Select a function...</option>';
                     
-                    data.functions.forEach(func => {
-                        // Find only functions with 2 inputs that match our pattern
-                        if (func.inputs && 
-                            func.inputs.length === 2 &&
-                            func.inputs[0].type.includes('bytes') &&
-                            func.inputs[1].type.includes('int')
-                        ) {
-                            const option = document.createElement('option');
-                            option.value = func.name;
-                            option.textContent = func.name + ' (' + func.inputs[1].type + ')';
-                            
-                            // Set computeRewards as the default selected option
-                            if (func.name === 'computeRewards') {
-                                option.selected = true;
-                            }
-                            
-                            select.appendChild(option);
-                        }
+                    // Filter for view functions in the ABI
+                    const viewFunctions = config.contractAbi.filter(item => 
+                        item.type === 'function' && 
+                        (item.stateMutability === 'view' || item.stateMutability === 'pure')
+                    );
+
+                    // Populate the dropdown with all view functions
+                    viewFunctions.forEach(func => {
+                        const option = document.createElement('option');
+                        option.value = func.name;
+                        option.textContent = `${func.name}(${func.inputs.map(input => input.type).join(', ')})`;
+                        select.appendChild(option);
                     });
                     
                     if (select.options.length <= 1) {
