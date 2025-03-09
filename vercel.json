@@ -1,9 +1,15 @@
 {
   "version": 2,
   "builds": [
-    { "src": "app-web.js", "use": "@vercel/node" }
+    { 
+      "src": "app-web.js", 
+      "use": "@vercel/node",
+      "config": {
+        "includeFiles": ["contract-abi.json"]
+      }
+    }
   ],
   "routes": [
     { "src": "/(.*)", "dest": "/app-web.js" }
   ]
-} 
+}
