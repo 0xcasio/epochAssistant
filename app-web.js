@@ -11,21 +11,7 @@ const config = {
   rpcUrl: process.env.RPC_URL || 'https://arb1.arbitrum.io/rpc',
   contractAddress: process.env.CONTRACT_ADDRESS || '',
   arbiscanApiKey: process.env.ARBISCAN_API_KEY || '',  // Optional, for higher rate limits
-  contractAbi: [
-    // Paste the ABI here - you can get it from Arbiscan
-    // Example of what it might look like:
-    {
-      "inputs": [
-        {"internalType": "bytes32", "name": "poolId", "type": "bytes32"},
-        {"internalType": "uint256", "name": "epoch", "type": "uint256"}
-      ],
-      "name": "computeRewards",
-      "outputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
-      "stateMutability": "view",
-      "type": "function"
-    },
-    // ... more functions
-  ],
+  contractAbi: require('./contract-abi.json'),
   selectedFunction: null,  // Will be set by user selection
   outputFilePath: process.env.OUTPUT_FILE_PATH || './results.csv',
   // Predefined values for pool IDs (bytes32 values)
@@ -277,6 +263,42 @@ function saveToFile(inputs, result, poolName = null) {
   // Append data
   fs.appendFileSync(config.outputFilePath, csvLine);
   console.log(`📝 Result saved to ${config.outputFilePath}`);
+}
+
+// Add this function to fetch and display full ABI
+async function displayFullABI() {
+    try {
+        // Arbiscan API URL
+        const apiUrl = 'https://api.arbiscan.io/api';
+        const apiParams = {
+            module: 'contract',
+            action: 'getabi',
+            address: '0x82C13fCab02A168F06E12373F9e5D2C2Bd47e399',
+            apikey: config.arbiscanApiKey || ''
+        };
+        
+        // Format URL with parameters
+        const queryString = Object.entries(apiParams)
+            .map(([key, value]) => `${key}=${value}`)
+            .join('&');
+        const url = `${apiUrl}?${queryString}`;
+        
+        // Make API request
+        const response = await axios.get(url);
+        
+        if (response.data.status === '1' && response.data.message === 'OK') {
+            const abi = JSON.parse(response.data.result);
+            console.log('Full Contract ABI:');
+            console.log(JSON.stringify(abi, null, 2));
+            return abi;
+        } else {
+            console.log(`Failed to fetch ABI: ${response.data.message}`);
+            return null;
+        }
+    } catch (error) {
+        console.error(`Error fetching ABI: ${error.message}`);
+        return null;
+    }
 }
 
 // ---- Simple Web Server ----
