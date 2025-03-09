@@ -796,7 +796,7 @@ const indexHtml = `
                 thead.innerHTML = `
                     <tr>
                         <th>Pool Name</th>
-                        <th>Total SYK rewards</th>
+                        <th>Total SYK rewardss</th>
                     </tr>
                 `;
             } else {
