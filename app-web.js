@@ -265,6 +265,95 @@ function saveToFile(inputs, result, poolName = null) {
   console.log(`📝 Result saved to ${config.outputFilePath}`);
 }
 
+// Handle general function calls with any parameters
+async function callGeneralFunction(functionName, inputValues) {
+  // Find function in ABI
+  const functionAbi = config.contractAbi.find(item => item.name === functionName);
+  
+  if (!functionAbi) {
+    return { 
+      success: false, 
+      error: `Function ${functionName} not found in ABI` 
+    };
+  }
+  
+  try {
+    // Set up provider and contract
+    const provider = new ethers.JsonRpcProvider(config.rpcUrl);
+    const contract = new ethers.Contract(
+      config.contractAddress,
+      config.contractAbi,
+      provider
+    );
+    
+    // Format input values based on types
+    const formattedInputs = inputValues.map((value, index) => {
+      const inputType = functionAbi.inputs[index].type;
+      
+      // Format based on type
+      if (inputType.includes('int')) {
+        return value.startsWith('0x') ? value : ethers.getBigInt(value);
+      } else if (inputType.includes('bool')) {
+        return value === 'true' || value === '1';
+      } else if (inputType.includes('bytes') && !value.startsWith('0x')) {
+        // Ensure bytes are properly formatted
+        return ethers.zeroPadValue(ethers.toBeHex(value), 32);
+      } else if (inputType === 'address') {
+        // Ensure address is valid
+        return ethers.getAddress(value);
+      }
+      
+      return value;
+    });
+    
+    // Call the function
+    const result = await contract[functionName](...formattedInputs);
+    
+    // Format the result
+    let formattedResult;
+    if (Array.isArray(result)) {
+      formattedResult = result.map(r => r.toString()).join(', ');
+    } else if (typeof result === 'object' && result !== null) {
+      // Handle struct returns
+      formattedResult = JSON.stringify(result);
+    } else {
+      formattedResult = result.toString();
+    }
+    
+    // For numeric results, also provide formatted value
+    let formattedValue = "N/A";
+    try {
+      if (!isNaN(formattedResult.replace(/,/g, ''))) {
+        const numericResult = parseFloat(formattedResult.replace(/,/g, ''));
+        formattedValue = (numericResult / 1e18).toString();
+        if (formattedValue.includes('.')) {
+          const parts = formattedValue.split('.');
+          if (parts[1].length > 6) {
+            formattedValue = `${parts[0]}.${parts[1].substring(0, 6)}`;
+          }
+        }
+      }
+    } catch (error) {
+      console.log(`Error formatting result: ${error.message}`);
+    }
+    
+    // Return result
+    return { 
+      success: true, 
+      results: [{
+        functionName,
+        inputs: inputValues,
+        result: formattedResult,
+        formattedValue,
+        error: null
+      }]
+    };
+  } catch (error) {
+    console.error(`Error calling function ${functionName}: ${error.message}`);
+    return { success: false, error: error.message };
+  }
+}
+
 // Add this function to fetch and display full ABI
 async function displayFullABI() {
     try {
@@ -421,13 +510,16 @@ const indexHtml = `
         .hidden {
             display: none;
         }
+        .mb-4 {
+            margin-bottom: 16px;
+        }
         #functionSelectContainer, #inputContainer {
             margin-bottom: 24px;
         }
     </style>
 </head>
 <body>
-    <h1>Stryke Epoch Rewards Lookup</h1>
+    <h1>Stryke Contract Explorer</h1>
     
     <div class="container">
         <div id="errorMsg" class="error hidden"></div>
@@ -442,11 +534,10 @@ const indexHtml = `
             </div>
             
             <div id="inputContainer">
-                <label for="input2Value">Enter Epoch number:</label>
-                <input type="text" id="input2Value" placeholder="Enter epoch number...">
+                <!-- This will be dynamically populated based on the selected function -->
             </div>
             
-            <button id="submitBtn" onclick="callFunction()">Find Rewards</button>
+            <button id="submitBtn" onclick="callFunction()">Execute Function</button>
         </div>
         
         <div id="loading" class="loading hidden">
@@ -456,10 +547,10 @@ const indexHtml = `
         <div id="results" class="results hidden">
             <h2>Results</h2>
             <table id="resultsTable">
-                <thead>
+                <thead id="resultsTableHead">
                     <tr>
-                        <th>Pool Name</th>
-                        <th>Total SYK rewards</th>
+                        <th>Result</th>
+                        <th>Formatted Value</th>
                     </tr>
                 </thead>
                 <tbody id="resultsBody">
@@ -469,6 +560,9 @@ const indexHtml = `
     </div>
 
     <script>
+        // Store API response data
+        let functionData = null;
+        
         // Initialize when page loads
         window.onload = function() {
             fetchFunctions();
@@ -481,25 +575,32 @@ const indexHtml = `
                 const data = await response.json();
                 
                 if (data.success) {
+                    functionData = data;
                     const select = document.getElementById('functionSelect');
                     select.innerHTML = '<option value="">Select a function...</option>';
                     
-                    // Filter for view functions in the ABI
-                    const viewFunctions = config.contractAbi.filter(item => 
-                        item.type === 'function' && 
-                        (item.stateMutability === 'view' || item.stateMutability === 'pure')
-                    );
-
-                    // Populate the dropdown with all view functions
-                    viewFunctions.forEach(func => {
-                        const option = document.createElement('option');
-                        option.value = func.name;
-                        option.textContent = `${func.name}(${func.inputs.map(input => input.type).join(', ')})`;
-                        select.appendChild(option);
+                    data.functions.forEach(func => {
+                        // Find only functions with 2 inputs that match our pattern
+                        if (func.inputs && 
+                            func.inputs.length === 2 &&
+                            func.inputs[0].type.includes('bytes') &&
+                            func.inputs[1].type.includes('int')
+                        ) {
+                            const option = document.createElement('option');
+                            option.value = func.name;
+                            option.textContent = func.name + ' (' + func.inputs[1].type + ')';
+                            
+                            // Set computeRewards as the default selected option
+                            if (func.name === 'computeRewards') {
+                                option.selected = true;
+                            }
+                            
+                            select.appendChild(option);
+                        }
                     });
                     
                     if (select.options.length <= 1) {
-                        showError('No suitable functions found. Functions should have bytes32 and uint256 inputs.');
+                        showError('No view functions found in the contract.');
                     }
                 } else {
                     showError(data.error || 'Failed to load functions');
@@ -509,26 +610,124 @@ const indexHtml = `
             }
         }
         
-        // Call the selected function with input value
-        async function callFunction() {
-            // Get input values
+        // Update input fields based on selected function
+        function updateInputFields() {
             const functionName = document.getElementById('functionSelect').value;
-            const input2Value = document.getElementById('input2Value').value;
+            const inputContainer = document.getElementById('inputContainer');
+            inputContainer.innerHTML = ''; // Clear existing inputs
             
-            // Validate inputs
+            if (!functionName || !functionData) return;
+            
+            // Find the selected function in ABI
+            const selectedFunction = functionData.functions.find(f => f.name === functionName);
+            if (!selectedFunction || !selectedFunction.inputs) return;
+            
+            // Special case for computeRewards function - use predefined pool IDs
+            if (functionName === 'computeRewards') {
+                // Add pool ID dropdown
+                const poolIdDiv = document.createElement('div');
+                poolIdDiv.className = 'mb-4';
+                poolIdDiv.innerHTML = \`
+                    <label for="poolIdSelect">Select Pool:</label>
+                    <select id="poolIdSelect" class="mb-4">
+                        <option value="">Select a pool...</option>
+                        <option value="0x02d1dc927ecebd87407e1a58a6f2d81f0d6c0ade72ac926e865310aa482b893a">PancakeSwap WETH</option>
+                        <option value="0x726dd6a67a7c5b399e0e6954596d6b01605ec97e34e75f5547416146ec001a6c">PancakeSwap WBTC</option>
+                        <option value="0x74b6b9b1267a0a12d24cfa963f1a3c96aae2f2cd870847cbc9a70c46b7803ae1">OrangeFinance PCS WETH</option>
+                        <option value="0xbb8c79b0fc39426b2cf4bb42501aaa2bdcc7a72f86a564d44a42c6385496618d">OrangeFinance PCS WBTC</option>
+                        <option value="0x36ff4f3050b6a776353d7d160276dcf6b310a658502e226fdd2fa049e6c603dd">OrangeFinance PCS ARB</option>
+                        <option value="all">All Pools</option>
+                    </select>
+                \`;
+                inputContainer.appendChild(poolIdDiv);
+                
+                // Add epoch input
+                const epochDiv = document.createElement('div');
+                epochDiv.innerHTML = \`
+                    <label for="epochInput">Enter Epoch:</label>
+                    <input type="text" id="epochInput" placeholder="Enter epoch number...">
+                \`;
+                inputContainer.appendChild(epochDiv);
+                return;
+            }
+            
+            // For other functions, create input fields based on function signature
+            selectedFunction.inputs.forEach((input, index) => {
+                const inputDiv = document.createElement('div');
+                inputDiv.className = 'mb-4';
+                const inputType = input.type;
+                const inputName = input.name || \`input\${index + 1}\`;
+                
+                inputDiv.innerHTML = \`
+                    <label for="input\${index}">\${inputName} (\${inputType}):</label>
+                    <input type="text" id="input\${index}" placeholder="Enter \${inputType} value...">
+                \`;
+                inputContainer.appendChild(inputDiv);
+            });
+        }
+        
+        // Call the selected function with input values
+        async function callFunction() {
+            // Get selected function
+            const functionName = document.getElementById('functionSelect').value;
+            
+            // Validate function selection
             if (!functionName) {
                 showError('Please select a function');
                 return;
             }
             
-            if (!input2Value) {
-                showError('Please enter an input value');
+            // Find function in ABI
+            const selectedFunction = functionData.functions.find(f => f.name === functionName);
+            if (!selectedFunction) {
+                showError('Function not found in ABI');
                 return;
             }
             
-            if (isNaN(input2Value)) {
-                showError('Input value must be a number');
-                return;
+            // Handle inputs based on function
+            let inputValues = [];
+            let useAllPools = false;
+            
+            if (functionName === 'computeRewards') {
+                const poolIdSelect = document.getElementById('poolIdSelect');
+                const epochInput = document.getElementById('epochInput');
+                
+                if (!poolIdSelect.value) {
+                    showError('Please select a pool');
+                    return;
+                }
+                
+                if (!epochInput.value && epochInput.value !== '0') {
+                    showError('Please enter an epoch number');
+                    return;
+                }
+                
+                if (isNaN(epochInput.value)) {
+                    showError('Epoch must be a number');
+                    return;
+                }
+                
+                if (poolIdSelect.value === 'all') {
+                    useAllPools = true;
+                } else {
+                    inputValues = [poolIdSelect.value, epochInput.value];
+                }
+            } else {
+                // For other functions, collect all input values
+                for (let i = 0; i < selectedFunction.inputs.length; i++) {
+                    const inputElement = document.getElementById(\`input\${i}\`);
+                    if (!inputElement) {
+                        showError(\`Missing input field for parameter \${i+1}\`);
+                        return;
+                    }
+                    
+                    if (!inputElement.value && inputElement.value !== '0') {
+                        showError(\`Please enter a value for \${selectedFunction.inputs[i].name || 'parameter ' + (i+1)}\`);
+                        return;
+                    }
+                    
+                    inputValues.push(inputElement.value);
+                }
             }
             
             // Clear previous messages and results
@@ -540,16 +739,32 @@ const indexHtml = `
             document.getElementById('submitBtn').disabled = true;
             
             try {
-                const response = await fetch('/api/call-function', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        functionName,
-                        input2Value
-                    })
-                });
+                let response;
+                
+                if (functionName === 'computeRewards' && useAllPools) {
+                    // Call for all pools
+                    response = await fetch('/api/call-all-pools', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            epoch: document.getElementById('epochInput').value
+                        })
+                    });
+                } else {
+                    // Regular function call
+                    response = await fetch('/api/call-function', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            functionName,
+                            inputValues
+                        })
+                    });
+                }
                 
                 const data = await response.json();
                 
@@ -558,8 +773,8 @@ const indexHtml = `
                 document.getElementById('submitBtn').disabled = false;
                 
                 if (data.success) {
-                    displayResults(data.results);
-                    showSuccess('Successfully fetched epoch!');
+                    displayResults(data.results, functionName);
+                    showSuccess('Successfully executed function!');
                 } else {
                     showError(data.error || 'Failed to call function');
                 }
@@ -571,150 +786,77 @@ const indexHtml = `
         }
         
         // Display results in the table
-        function displayResults(results) {
+        function displayResults(results, functionName) {
             const tbody = document.getElementById('resultsBody');
+            const thead = document.getElementById('resultsTableHead');
             tbody.innerHTML = '';
             
-            results.forEach(result => {
-                const row = document.createElement('tr');
-                
-                // Pool name cell
-                const nameCell = document.createElement('td');
-                nameCell.textContent = result.poolName;
-                row.appendChild(nameCell);
-                
-                // Formatted result cell
-                const formattedCell = document.createElement('td');
-                if (result.error) {
-                    formattedCell.textContent = 'N/A';
-                } else {
-                    formattedCell.textContent = result.formattedValue;
-                }
-                row.appendChild(formattedCell);
-                
-                tbody.appendChild(row);
-            });
+            // Update table headers based on function name
+            if (functionName === 'computeRewards') {
+                thead.innerHTML = `
+                    <tr>
+                        <th>Pool Name</th>
+                        <th>Total SYK rewards</th>
+                    </tr>
+                `;
+            } else {
+                thead.innerHTML = `
+                    <tr>
+                        <th>Function</th>
+                        <th>Result</th>
+                        <th>Formatted Value</th>
+                    </tr>
+                `;
+            }
             
-            document.getElementById('results').classList.remove('hidden');
-        }
-        
-        // Show error message
-        function showError(message) {
-            const errorMsg = document.getElementById('errorMsg');
-            errorMsg.textContent = message;
-            errorMsg.classList.remove('hidden');
-        }
-        
-        // Show success message
-        function showSuccess(message) {
-            const successMsg = document.getElementById('successMsg');
-            successMsg.textContent = message;
-            successMsg.classList.remove('hidden');
-        }
-        
-        // Clear messages
-        function clearMessages() {
-            document.getElementById('errorMsg').classList.add('hidden');
-            document.getElementById('successMsg').classList.add('hidden');
-        }
-    </script>
-</body>
-</html>
-`;
-
-// Create HTTP server handler for Vercel
-module.exports = async (req, res) => {
-  try {
-    // Set CORS headers
-    res.setHeader('Access-Control-Allow-Credentials', true);
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,POST');
-    res.setHeader('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version');
-
-    if (req.method === 'OPTIONS') {
-      res.status(200).end();
-      return;
-    }
-
-    // Parse URL
-    const url = new URL(req.url, `https://${req.headers.host}`);
-    const pathname = url.pathname;
-    
-    // Route requests
-    if (req.method === 'GET' && (pathname === '/' || pathname === '')) {
-      // Serve main HTML page
-      res.setHeader('Content-Type', 'text/html');
-      res.status(200).send(indexHtml);
-    }
-    else if (req.method === 'GET' && pathname === '/api/functions') {
-      // Get contract functions
-      if (!config.contractAbi || config.contractAbi.length === 0) {
-        // Fetch ABI if not available
-        await fetchContractAbi();
-      }
-      
-      console.log(`Total ABI items: ${config.contractAbi.length}`);
-      const readFunctions = config.contractAbi.filter(item => 
-        item.type === 'function' && 
-        (item.stateMutability === 'view' || item.stateMutability === 'pure')
-      );
-      console.log(`Read functions found: ${readFunctions.length}`);
-      
-      // After filtering for functions with bytes32 and uint256 inputs, add:
-      const suitableFunctions = readFunctions.filter(func => 
-        func.inputs && 
-        func.inputs.length === 2 &&
-        func.inputs[0].type.includes('bytes') &&
-        func.inputs[1].type.includes('int')
-      );
-      console.log(`Suitable functions found: ${suitableFunctions.length}`);
-      if (suitableFunctions.length > 0) {
-        console.log('First suitable function:', suitableFunctions[0].name);
-      }
-      
-      res.setHeader('Content-Type', 'application/json');
-      res.status(200).json({ success: true, functions: suitableFunctions });
-    }
-    else if (req.method === 'POST' && pathname === '/api/call-function') {
-      // Parse request body
-      const body = req.body;
-      const { functionName, input2Value } = body;
-      
-      if (!functionName) {
-        res.setHeader('Content-Type', 'application/json');
-        res.status(400).json({ success: false, error: 'Function name is required' });
-        return;
-      }
-      
-      if (!input2Value && input2Value !== '0') {
-        res.setHeader('Content-Type', 'application/json');
-        res.status(400).json({ success: false, error: 'Input value is required' });
-        return;
-      }
-      
-      // Find function in ABI
-      config.selectedFunction = config.contractAbi.find(item => item.name === functionName);
-      
-      if (!config.selectedFunction) {
-        res.setHeader('Content-Type', 'application/json');
-        res.status(400).json({ success: false, error: `Function ${functionName} not found in ABI` });
-        return;
-      }
-      
-      // Process all pool IDs
-      const result = await processAllPoolIds(input2Value);
-      
-      res.setHeader('Content-Type', 'application/json');
-      res.status(200).json(result);
-    }
-    else {
-      // Not found
-      res.setHeader('Content-Type', 'text/plain');
-      res.status(404).send('Not Found');
-    }
-  } catch (error) {
-    // Server error
-    res.setHeader('Content-Type', 'text/plain');
-    res.status(500).send('Internal Server Error: ' + error.message);
-  }
-};
+            // Display results based on function type
+            if (functionName === 'computeRewards') {
+                results.forEach(result => {
+                    const row = document.createElement('tr');
+                    
+                    // Pool name cell
+                    const nameCell = document.createElement('td');
+                    nameCell.textContent = result.poolName;
+                    row.appendChild(nameCell);
+                    
+                    // Formatted result cell
+                    const formattedCell = document.createElement('td');
+                    if (result.error) {
+                        formattedCell.textContent = 'N/A';
+                    } else {
+                        formattedCell.textContent = result.formattedValue;
+                    }
+                    row.appendChild(formattedCell);
+                    
+                    tbody.appendChild(row);
+                });
+            } else {
+                results.forEach(result => {
+                    const row = document.createElement('tr');
+                    
+                    // Function name cell
+                    const nameCell = document.createElement('td');
+                    nameCell.textContent = functionName;
+                    row.appendChild(nameCell);
+                    
+                    // Raw result cell
+                    const resultCell = document.createElement('td');
+                    if (result.error) {
+                        resultCell.textContent = 'Error: ' + result.error;
+                    } else {
+                        resultCell.textContent = result.result;
+                    }
+                    row.appendChild(resultCell);
+                    
+                    // Formatted value cell
+                    const formattedCell = document.createElement('td');
+                    if (result.error) {
+                        formattedCell.textContent = 'N/A';
+                    } else {
+                        formattedCell.textContent = result.formattedValue;
+                    }
+                    row.appendChild(formattedCell);
+                    
+                    tbody.appendChild(row);
+                });
+            }
